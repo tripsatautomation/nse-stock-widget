@@ -36,13 +36,20 @@ WHAT'S IN THE NEWS
 
 | Line | What it tells you |
 |---|---|
-| Out/underperforming NIFTY | Stock-specific move, or just the whole market? |
-| Volume vs 20-day average | 2×+ = a real event. Under 0.6× = quiet drift. |
-| 5-day / 1-month trend | Is today part of a run, or a reversal? |
-| 52-week range position | Near its highs or near its lows. |
-| What's in the news | Recent headlines that actually name the company, plus a tone tally. |
-| What the record says | Trend against its 20/50/200-day averages, RSI, whether today's move is big *for this stock*, annualised volatility, 3-month record. |
-| Distance to key levels | How far the price is from its 50-day average and its 52-week high and low, and what a normal vs big day looks like. |
+| Better/worse than the market | Stock-specific move, or just the whole market? |
+| How busy trading was | Far more shares than usual = a real event. Far fewer = quiet drift. |
+| Zooming out | Past week and past month — is today part of a run, or a reversal? |
+| Where it sits in its year | Near the top or the bottom of its 52-week range. |
+| What's in the news | Recent headlines that actually name the company, plus a plain read of their tone. |
+| How it has been doing | Price against its 20/50/200-day average prices, a 0–100 momentum score, whether today's move is big *for this stock*, how jumpy it is over a year, 3-month record. |
+| How far it is from its usual marks | Distance from its 50-day average price and from its 52-week high and low. |
+
+Every line is written for someone with no market background: no tickers'
+worth of jargon, no abbreviations, no indicator names. The underlying
+calculations are the standard ones (20/50/200-day simple moving averages,
+Wilder's 14-day RSI shown as a 0–100 "momentum score", the standard deviation
+of daily returns shown as "how much it moves on an ordinary day", and that
+figure annualised) — they are just described in words instead of named.
 
 A symbol turns **orange with a bolt** when volume is 2×+ its 20-day average —
 a quick scan for "something is actually happening here".

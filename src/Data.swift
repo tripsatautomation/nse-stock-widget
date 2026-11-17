@@ -417,6 +417,13 @@ enum Fmt {
         return String(format: "%+.2f%%", p)
     }
 
+    /// "up 8.31%" / "down 2.40%" / "flat" — for sentences a beginner reads aloud.
+    static func updown(_ p: Double?) -> String {
+        guard let p = p else { return "--" }
+        if abs(p) < 0.05 { return "flat" }
+        return (p > 0 ? "up " : "down ") + String(format: "%.2f%%", abs(p))
+    }
+
     static func ago(_ d: Date?) -> String {
         guard let d = d else { return "" }
         let s = Date().timeIntervalSince(d)

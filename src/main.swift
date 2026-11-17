@@ -129,71 +129,76 @@ final class Store: ObservableObject {
         return (p, n, items.count)
     }
 
-    /// What the historical record says about where this stock currently sits.
+    /// What the past record says, written for someone new to the market:
+    /// no abbreviations, no indicator names, every number explained in words.
     /// Descriptive only — deliberately no buy/sell/hold view and no price target.
     func signals(_ h: Holding) -> [(String, Color)] {
         guard let q = quotes[h.yahoo] else { return [] }
         var out: [(String, Color)] = []
         let p = q.price
 
-        // Trend structure against its own moving averages
+        // Where today's price sits against its own recent average prices.
         if let s20 = q.sma20, let s50 = q.sma50 {
             let a20 = p >= s20, a50 = p >= s50
             var txt: String
             var c: Color
             switch (a20, a50) {
             case (true, true):
-                txt = "Above both its 20- and 50-day averages — trending up on its own record."
+                txt = "Today's price is above its average price of the last 20 days (\u{20B9}\(Fmt.inr(s20, 0))) and of the last 50 days (\u{20B9}\(Fmt.inr(s50, 0))) \u{2014} it has been climbing lately."
                 c = .up
             case (false, false):
-                txt = "Below both its 20- and 50-day averages — trending down on its own record."
+                txt = "Today's price is below its average price of the last 20 days (\u{20B9}\(Fmt.inr(s20, 0))) and of the last 50 days (\u{20B9}\(Fmt.inr(s50, 0))) \u{2014} it has been sliding lately."
                 c = .down
             case (true, false):
-                txt = "Above the 20-day but below the 50-day — a short-term bounce inside a weaker trend."
+                txt = "It is above its 20-day average price but still below its 50-day one \u{2014} it has picked up in the last few weeks after a weaker couple of months."
                 c = .accent
             case (false, true):
-                txt = "Below the 20-day but still above the 50-day — cooling off from a stronger trend."
+                txt = "It has slipped below its 20-day average price but is still above its 50-day one \u{2014} it is cooling off after a stronger run."
                 c = .accent
             }
             if let s200 = q.sma200 {
-                txt += p >= s200 ? " Still above its 200-day line."
-                                 : " Below its 200-day line, so the year-long trend is down."
+                txt += p >= s200 ? " It is also above its average price for the past year, so the longer picture is healthy."
+                                 : " It is still below its average price for the past year, so the longer picture is weak."
             }
             out.append((txt, c))
         }
 
-        // Momentum
+        // Momentum, described rather than named.
         if let r = q.rsi14 {
             let label: String, c: Color
-            if r >= 70 { label = "overbought territory — it has run hard and often cools from here"; c = .accent }
-            else if r <= 30 { label = "oversold territory — it has been sold hard and often steadies from here"; c = .accent }
-            else if r >= 55 { label = "firm but not stretched"; c = .up }
-            else if r <= 45 { label = "soft but not washed out"; c = .down }
-            else { label = "neutral"; c = .muted }
-            out.append((String(format: "RSI %.0f — %@.", r, label), c))
+            if r >= 70 { label = "it has been bought very hard lately, and stocks this stretched often pause or slip back"; c = .accent }
+            else if r <= 30 { label = "it has been sold very hard lately, and stocks beaten down this far often steady for a while"; c = .accent }
+            else if r >= 55 { label = "buyers have had the upper hand, without it being overdone"; c = .up }
+            else if r <= 45 { label = "sellers have had the upper hand, without it being extreme"; c = .down }
+            else { label = "buyers and sellers have been evenly matched"; c = .muted }
+            out.append((String(format: "Momentum score %.0f out of 100 \u{2014} %@.", r, label), c))
         }
 
-        // Is today's move big for this stock?
+        // How big today's move is for this particular stock.
         if let sd = q.sigma1d, sd > 0 {
             let mult = abs(q.pct) / sd
-            let desc = mult >= 2 ? "a genuinely big day for this stock"
-                     : (mult >= 1 ? "a larger-than-usual day" : "within its normal daily noise")
-            out.append((String(format: "Today's %@ move is %.1f× its typical daily swing (±%.1f%%) — %@.",
-                               Fmt.pct(q.pct), mult, sd, desc),
+            let desc = mult >= 2 ? "well beyond that \u{2014} an unusual day for it"
+                     : (mult >= 1 ? "a bit bigger than that" : "well inside what it does on an ordinary day")
+            out.append((String(format: "On an ordinary day this stock moves about %.1f%% either way. Today's %.2f%% move is %@.",
+                               sd, abs(q.pct), desc),
                         mult >= 2 ? .accent : .muted))
         }
         if let av = q.annVol {
-            out.append((String(format: "Annualised volatility %.0f%%.", av), .muted))
+            let how: String
+            if av < 20 { how = "calmer than most listed companies" }
+            else if av < 35 { how = "about as jumpy as most listed companies" }
+            else if av < 55 { how = "jumpier than most listed companies" }
+            else { how = "far jumpier than most listed companies" }
+            out.append((String(format: "Over a full year its price swings by roughly %.0f%% \u{2014} %@.", av, how), .muted))
         }
 
-        // Longer-horizon record vs the index
         if let c3 = q.chg3mo, !(h.etf == true) {
-            out.append(("3-month record: \(Fmt.pct(c3)).", tone(c3)))
+            out.append(("Over the last three months it is \(Fmt.updown(c3)).", tone(c3)))
         }
         return out
     }
 
-    /// Pure arithmetic between the current price and levels from the record.
+    /// Simple arithmetic: how far today's price is from marks set in the past year.
     func levels(_ h: Holding) -> [(String, Color)] {
         guard let q = quotes[h.yahoo], q.price > 0 else { return [] }
         let p = q.price
@@ -201,16 +206,13 @@ final class Store: ObservableObject {
         func line(_ label: String, _ target: Double?) {
             guard let t = target, t > 0 else { return }
             let d = (t / p - 1) * 100
-            out.append((String(format: "%@ %@  (%@ from here)", label, Fmt.inr(t, 2), Fmt.pct(d)),
+            out.append((String(format: "%@: \u{20B9}%@ \u{2014} that is %.1f%% %@ today's price.",
+                               label, Fmt.inr(t, 2), abs(d), d >= 0 ? "above" : "below"),
                         tone(d)))
         }
-        line("Back to its 50-day average", q.sma50)
-        line("Back to its 52-week high", q.high52)
-        line("Down to its 52-week low", q.low52)
-        if let sd = q.sigma1d {
-            out.append((String(format: "A normal day for it is ±%.1f%%; a big one ±%.1f%%.",
-                               sd, sd * 2), .muted))
-        }
+        line("Its average price over the last 50 days", q.sma50)
+        line("The highest it reached in the past year", q.high52)
+        line("The lowest it fell to in the past year", q.low52)
         return out
     }
 
@@ -257,44 +259,52 @@ final class Store: ObservableObject {
     }
     var totalPnl: Double { lines.reduce(0) { $0 + ($1.pnl ?? 0) } }
 
-    /// Plain-language read of what the numbers say about a move.
+    /// The top block of the detail panel: what happened today, in plain words.
     func explain(_ h: Holding) -> [(String, Color)] {
         guard let q = quotes[h.yahoo] else {
-            return [("No price data yet — hit refresh.", .muted)]
+            return [("No price data yet \u{2014} hit refresh.", .muted)]
         }
         var out: [(String, Color)] = []
-        out.append(("₹\(Fmt.inr(q.price, 2))   \(Fmt.signed(q.change, 2)) (\(Fmt.pct(q.pct))) today",
+        let dir = q.change >= 0 ? "up" : "down"
+        out.append((String(format: "Price now \u{20B9}%@ \u{2014} %@ \u{20B9}%@ (%.2f%%) since yesterday's close.",
+                           Fmt.inr(q.price, 2), dir, Fmt.inr(abs(q.change), 2), abs(q.pct)),
                     tone(q.pct)))
         if h.etf == true {
-            out.append(("ETF — it tracks the \(h.name) index, so it moves with the index rather than on company news.", .muted))
+            out.append(("This is a basket fund: it holds many companies at once and follows the \(h.name) index, so it moves with the market as a whole rather than on one company's news.", .muted))
         } else if let n = nifty {
             let d = q.pct - n
-            out.append(((d > 0 ? "Outperforming" : "Underperforming")
-                        + String(format: " NIFTY by %.2f%% today (NIFTY %@).", abs(d), Fmt.pct(n)),
+            out.append((String(format: "The market as a whole (the NIFTY index) is %@ %.2f%% today, so this stock is doing %.2f%% %@ than the market.",
+                               n >= 0 ? "up" : "down", abs(n), abs(d), d > 0 ? "better" : "worse"),
                         tone(d)))
         }
         if let vr = q.volRatio {
             if vr >= 2 {
-                out.append((String(format: "Volume is %.1f× its 20-day average — a real event, not drift.", vr), .accent))
+                out.append((String(format: "Far more shares than usual changed hands today \u{2014} %.1f times the normal amount. Something specific is driving this, not random drift.", vr), .accent))
             } else if vr < 0.6 {
-                out.append((String(format: "Volume only %.1f× average — a quiet, low-conviction move.", vr), .muted))
+                out.append((String(format: "Fewer shares than usual changed hands today \u{2014} only %.1f times the normal amount. A quiet move that few people took part in.", vr), .muted))
             } else {
-                out.append((String(format: "Volume %.1f× its 20-day average.", vr), .muted))
+                out.append((String(format: "Trading was about as busy as normal for this stock (%.1f times its usual).", vr), .muted))
             }
         }
-        var bits: [String] = []
-        if let c5 = q.chg5d { bits.append("5-day \(Fmt.pct(c5))") }
-        if let c1 = q.chg1mo { bits.append("1-month \(Fmt.pct(c1))") }
-        if !bits.isEmpty { out.append(("Trend: " + bits.joined(separator: "  ·  "), tone(q.chg5d))) }
+        if let c5 = q.chg5d, let c1 = q.chg1mo {
+            out.append(("Zooming out: \(Fmt.updown(c5)) over the past week, \(Fmt.updown(c1)) over the past month.", tone(c5)))
+        } else if let c5 = q.chg5d {
+            out.append(("Zooming out: \(Fmt.updown(c5)) over the past week.", tone(c5)))
+        }
         if let hi = q.high52, let lo = q.low52, hi > lo {
             let pos = (q.price - lo) / (hi - lo) * 100
-            out.append((String(format: "%.0f%% up its 52-week range (%@ – %@).", pos,
-                               Fmt.inr(lo, 0), Fmt.inr(hi, 0)), .muted))
+            let where_: String
+            if pos < 25 { where_ = "near the bottom of that range" }
+            else if pos < 45 { where_ = "in the lower half of that range" }
+            else if pos < 55 { where_ = "around the middle of that range" }
+            else if pos < 75 { where_ = "in the upper half of that range" }
+            else { where_ = "near the top of that range" }
+            out.append(("In the past year it has traded between \u{20B9}\(Fmt.inr(lo, 0)) and \u{20B9}\(Fmt.inr(hi, 0)). Today's price sits \(where_).", .muted))
         }
         if let dl = q.dayLow, let dh = q.dayHigh {
-            out.append(("Day range \(Fmt.inr(dl, 2)) – \(Fmt.inr(dh, 2)).", .muted))
+            out.append(("Today it has traded between \u{20B9}\(Fmt.inr(dl, 2)) and \u{20B9}\(Fmt.inr(dh, 2)).", .muted))
         }
-        if q.stale { out.append(("Showing last cached price — the latest fetch failed.", .accent)) }
+        if q.stale { out.append(("This is the last price we managed to fetch \u{2014} the newest update did not come through.", .accent)) }
         return out
     }
 }
@@ -396,13 +406,21 @@ struct DetailPanel: View {
     @ObservedObject var store: Store
     let h: Holding
 
+    /// A one-line read on the headlines, in the words a beginner would use.
     func toneLine(_ t: (pos: Int, neg: Int, total: Int)) -> String {
-        if t.pos == 0 && t.neg == 0 {
-            return "Tone: \(t.total) headline(s), none clearly positive or negative."
+        if t.total == 1 {
+            if t.pos == 1 { return "The headline above sounds like good news." }
+            if t.neg == 1 { return "The headline above sounds like bad news." }
+            return "The headline above is neither clearly good nor clearly bad news."
         }
-        let lead = t.pos > t.neg ? "leans positive" : (t.neg > t.pos ? "leans negative" : "is mixed")
-        return "Tone: of \(t.total) recent headlines, \(t.pos) read positive and "
-             + "\(t.neg) negative — coverage \(lead)."
+        if t.pos == 0 && t.neg == 0 {
+            return "None of the \(t.total) headlines above clearly sounds like good or bad news."
+        }
+        let lead = t.pos > t.neg ? "so recent coverage is mostly good news"
+                 : (t.neg > t.pos ? "so recent coverage is mostly bad news"
+                                  : "so recent coverage is mixed")
+        return "Of the \(t.total) headlines above, \(t.pos) sound like good news and "
+             + "\(t.neg) like bad news \u{2014} \(lead)."
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -450,7 +468,7 @@ struct DetailPanel: View {
             let sig = store.signals(h)
             if !sig.isEmpty {
                 Divider().background(Color.hairline).padding(.vertical, 3)
-                Text("WHAT THE RECORD SAYS")
+                Text("HOW IT HAS BEEN DOING")
                     .font(.system(size: 9, weight: .bold)).foregroundColor(.muted)
                 ForEach(Array(sig.enumerated()), id: \.offset) { _, row in
                     Text(row.0).font(.system(size: 10)).foregroundColor(row.1)
@@ -462,16 +480,17 @@ struct DetailPanel: View {
             let lv = store.levels(h)
             if !lv.isEmpty {
                 Divider().background(Color.hairline).padding(.vertical, 3)
-                Text("DISTANCE TO KEY LEVELS")
+                Text("HOW FAR IT IS FROM ITS USUAL MARKS")
                     .font(.system(size: 9, weight: .bold)).foregroundColor(.muted)
                 ForEach(Array(lv.enumerated()), id: \.offset) { _, row in
-                    Text(row.0).font(.system(size: 10, design: .monospaced))
+                    Text(row.0).font(.system(size: 10))
                         .foregroundColor(row.1)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                Text("Signals and arithmetic from past data — not advice, not a forecast, "
-                     + "and not a buy or sell view. Past moves don't determine future ones.")
+                Text("Everything above describes what has already happened. It is not "
+                     + "advice and not a prediction — nobody can tell you what the price "
+                     + "will do next, and past moves don't decide future ones.")
                     .font(.system(size: 9, weight: .medium)).foregroundColor(.accent)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
