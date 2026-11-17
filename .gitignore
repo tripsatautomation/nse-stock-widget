@@ -1,0 +1,8 @@
+# Personal portfolio — never commit. Copy holdings.example.json to holdings.json.
+holdings.json
+.cache.json
+
+# Build output
+*.o
+*.swiftmodule
+.DS_Store

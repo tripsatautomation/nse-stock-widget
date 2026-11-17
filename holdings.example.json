@@ -1,0 +1,18 @@
+{
+  "_help": "Copy this file to holdings.json and put your own positions in it. holdings.json is gitignored. 'yahoo' is the fetch symbol (NSE stocks are SYMBOL.NS), 'name' is used for the news search, 'avg' is your average buy price (null = skip P&L for that row), 'etf': true marks index trackers.",
+  "currency": "INR",
+  "holdings": [
+    {"symbol": "RELIANCE",  "yahoo": "RELIANCE.NS",  "name": "Reliance Industries", "qty": 10, "avg": 1400.00},
+    {"symbol": "TCS",       "yahoo": "TCS.NS",       "name": "Tata Consultancy Services", "qty": 5, "avg": 3900.00},
+    {"symbol": "HDFCBANK",  "yahoo": "HDFCBANK.NS",  "name": "HDFC Bank", "qty": 15, "avg": 1650.00},
+    {"symbol": "INFY",      "yahoo": "INFY.NS",      "name": "Infosys", "qty": 20, "avg": 1500.00},
+    {"symbol": "ITC",       "yahoo": "ITC.NS",       "name": "ITC", "qty": 25, "avg": 420.00},
+    {"symbol": "NIFTYBEES", "yahoo": "NIFTYBEES.NS", "name": "Nifty 50", "qty": 50, "avg": 270.00, "etf": true}
+  ],
+  "indices": [
+    {"symbol": "NIFTY 50",   "yahoo": "^NSEI"},
+    {"symbol": "SENSEX",     "yahoo": "^BSESN"},
+    {"symbol": "BANK NIFTY", "yahoo": "^NSEBANK"},
+    {"symbol": "INDIA VIX",  "yahoo": "^INDIAVIX"}
+  ]
+}
