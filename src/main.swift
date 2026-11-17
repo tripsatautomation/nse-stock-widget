@@ -102,6 +102,118 @@ final class Store: ObservableObject {
         }
     }
 
+    // MARK: Signal read
+
+    static let posWords = ["wins", "win", "bags", "order", "orders", "profit", "surge",
+                           "surges", "jumps", "rally", "rallies", "upgrade", "upgrades",
+                           "approval", "approved", "expansion", "record", "beats", "beat",
+                           "growth", "dividend", "bonus", "buyback", "acquires",
+                           "acquisition", "gains", "deal", "launch", "launches",
+                           "partnership", "contract", "boost", "strong", "rises"]
+    static let negWords = ["loss", "losses", "falls", "slumps", "plunges", "downgrade",
+                           "downgrades", "probe", "ban", "recall", "fine", "penalty",
+                           "decline", "declines", "cuts", "warning", "lawsuit", "resigns",
+                           "resignation", "observations", "483", "fraud", "raid", "notice",
+                           "slump", "drops", "weak", "miss", "misses", "delay", "halt"]
+
+    /// Counts how many recent headlines read positive vs negative.
+    func newsTone(_ symbol: String) -> (pos: Int, neg: Int, total: Int) {
+        guard let items = news[symbol], !items.isEmpty else { return (0, 0, 0) }
+        var p = 0, n = 0
+        for it in items {
+            let low = it.title.lowercased()
+            let pc = Store.posWords.filter { low.contains($0) }.count
+            let nc = Store.negWords.filter { low.contains($0) }.count
+            if pc > nc { p += 1 } else if nc > pc { n += 1 }
+        }
+        return (p, n, items.count)
+    }
+
+    /// What the historical record says about where this stock currently sits.
+    /// Descriptive only — deliberately no buy/sell/hold view and no price target.
+    func signals(_ h: Holding) -> [(String, Color)] {
+        guard let q = quotes[h.yahoo] else { return [] }
+        var out: [(String, Color)] = []
+        let p = q.price
+
+        // Trend structure against its own moving averages
+        if let s20 = q.sma20, let s50 = q.sma50 {
+            let a20 = p >= s20, a50 = p >= s50
+            var txt: String
+            var c: Color
+            switch (a20, a50) {
+            case (true, true):
+                txt = "Above both its 20- and 50-day averages — trending up on its own record."
+                c = .up
+            case (false, false):
+                txt = "Below both its 20- and 50-day averages — trending down on its own record."
+                c = .down
+            case (true, false):
+                txt = "Above the 20-day but below the 50-day — a short-term bounce inside a weaker trend."
+                c = .accent
+            case (false, true):
+                txt = "Below the 20-day but still above the 50-day — cooling off from a stronger trend."
+                c = .accent
+            }
+            if let s200 = q.sma200 {
+                txt += p >= s200 ? " Still above its 200-day line."
+                                 : " Below its 200-day line, so the year-long trend is down."
+            }
+            out.append((txt, c))
+        }
+
+        // Momentum
+        if let r = q.rsi14 {
+            let label: String, c: Color
+            if r >= 70 { label = "overbought territory — it has run hard and often cools from here"; c = .accent }
+            else if r <= 30 { label = "oversold territory — it has been sold hard and often steadies from here"; c = .accent }
+            else if r >= 55 { label = "firm but not stretched"; c = .up }
+            else if r <= 45 { label = "soft but not washed out"; c = .down }
+            else { label = "neutral"; c = .muted }
+            out.append((String(format: "RSI %.0f — %@.", r, label), c))
+        }
+
+        // Is today's move big for this stock?
+        if let sd = q.sigma1d, sd > 0 {
+            let mult = abs(q.pct) / sd
+            let desc = mult >= 2 ? "a genuinely big day for this stock"
+                     : (mult >= 1 ? "a larger-than-usual day" : "within its normal daily noise")
+            out.append((String(format: "Today's %@ move is %.1f× its typical daily swing (±%.1f%%) — %@.",
+                               Fmt.pct(q.pct), mult, sd, desc),
+                        mult >= 2 ? .accent : .muted))
+        }
+        if let av = q.annVol {
+            out.append((String(format: "Annualised volatility %.0f%%.", av), .muted))
+        }
+
+        // Longer-horizon record vs the index
+        if let c3 = q.chg3mo, !(h.etf == true) {
+            out.append(("3-month record: \(Fmt.pct(c3)).", tone(c3)))
+        }
+        return out
+    }
+
+    /// Pure arithmetic between the current price and levels from the record.
+    func levels(_ h: Holding) -> [(String, Color)] {
+        guard let q = quotes[h.yahoo], q.price > 0 else { return [] }
+        let p = q.price
+        var out: [(String, Color)] = []
+        func line(_ label: String, _ target: Double?) {
+            guard let t = target, t > 0 else { return }
+            let d = (t / p - 1) * 100
+            out.append((String(format: "%@ %@  (%@ from here)", label, Fmt.inr(t, 2), Fmt.pct(d)),
+                        tone(d)))
+        }
+        line("Back to its 50-day average", q.sma50)
+        line("Back to its 52-week high", q.high52)
+        line("Down to its 52-week low", q.low52)
+        if let sd = q.sigma1d {
+            out.append((String(format: "A normal day for it is ±%.1f%%; a big one ±%.1f%%.",
+                               sd, sd * 2), .muted))
+        }
+        return out
+    }
+
     func loadNews(for h: Holding) {
         guard news[h.symbol] == nil, !newsLoading.contains(h.symbol) else { return }
         newsLoading.insert(h.symbol)
@@ -283,6 +395,15 @@ struct SummaryCard: View {
 struct DetailPanel: View {
     @ObservedObject var store: Store
     let h: Holding
+
+    func toneLine(_ t: (pos: Int, neg: Int, total: Int)) -> String {
+        if t.pos == 0 && t.neg == 0 {
+            return "Tone: \(t.total) headline(s), none clearly positive or negative."
+        }
+        let lead = t.pos > t.neg ? "leans positive" : (t.neg > t.pos ? "leans negative" : "is mixed")
+        return "Tone: of \(t.total) recent headlines, \(t.pos) read positive and "
+             + "\(t.neg) negative — coverage \(lead)."
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             ForEach(Array(store.explain(h).enumerated()), id: \.offset) { _, row in
@@ -315,7 +436,46 @@ struct DetailPanel: View {
                             if let u = URL(string: it.link) { NSWorkspace.shared.open(u) }
                         }
                     }
+                    let t = store.newsTone(h.symbol)
+                    if t.total > 0 {
+                        Text(toneLine(t))
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(t.pos > t.neg ? .up : (t.neg > t.pos ? .down : .muted))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 2)
+                    }
                 }
+            }
+
+            let sig = store.signals(h)
+            if !sig.isEmpty {
+                Divider().background(Color.hairline).padding(.vertical, 3)
+                Text("WHAT THE RECORD SAYS")
+                    .font(.system(size: 9, weight: .bold)).foregroundColor(.muted)
+                ForEach(Array(sig.enumerated()), id: \.offset) { _, row in
+                    Text(row.0).font(.system(size: 10)).foregroundColor(row.1)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+
+            let lv = store.levels(h)
+            if !lv.isEmpty {
+                Divider().background(Color.hairline).padding(.vertical, 3)
+                Text("DISTANCE TO KEY LEVELS")
+                    .font(.system(size: 9, weight: .bold)).foregroundColor(.muted)
+                ForEach(Array(lv.enumerated()), id: \.offset) { _, row in
+                    Text(row.0).font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(row.1)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Text("Signals and arithmetic from past data — not advice, not a forecast, "
+                     + "and not a buy or sell view. Past moves don't determine future ones.")
+                    .font(.system(size: 9, weight: .medium)).foregroundColor(.accent)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 4)
             }
         }
         .padding(.horizontal, 10).padding(.vertical, 9)

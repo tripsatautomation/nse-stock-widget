@@ -118,6 +118,13 @@ struct Quote {
     var avgVolume: Double?
     var chg5d: Double?
     var chg1mo: Double?
+    var chg3mo: Double?
+    var sma20: Double?
+    var sma50: Double?
+    var sma200: Double?
+    var rsi14: Double?
+    var sigma1d: Double?      // 1-day standard deviation, %
+    var annVol: Double?       // annualised volatility, %
     var stale: Bool = false
     var volRatio: Double? {
         guard let v = volume, let a = avgVolume, a > 0 else { return nil }
@@ -152,13 +159,51 @@ enum Net {
     }
 }
 
+enum TA {
+    static func sma(_ c: [Double], _ n: Int) -> Double? {
+        guard c.count >= n, n > 0 else { return nil }
+        return c.suffix(n).reduce(0, +) / Double(n)
+    }
+
+    /// Wilder's RSI.
+    static func rsi(_ c: [Double], _ n: Int = 14) -> Double? {
+        guard c.count > n else { return nil }
+        var gain = 0.0, loss = 0.0
+        for i in 1...n {
+            let d = c[i] - c[i - 1]
+            if d > 0 { gain += d } else { loss -= d }
+        }
+        var ag = gain / Double(n), al = loss / Double(n)
+        if c.count > n + 1 {
+            for i in (n + 1)..<c.count {
+                let d = c[i] - c[i - 1]
+                ag = (ag * Double(n - 1) + max(d, 0)) / Double(n)
+                al = (al * Double(n - 1) + max(-d, 0)) / Double(n)
+            }
+        }
+        guard al > 0 else { return 100 }
+        return 100 - 100 / (1 + ag / al)
+    }
+
+    /// Daily standard deviation of returns, in percent.
+    static func sigma(_ c: [Double]) -> Double? {
+        guard c.count > 20 else { return nil }
+        var rets: [Double] = []
+        for i in 1..<c.count where c[i - 1] > 0 { rets.append(c[i] / c[i - 1] - 1) }
+        guard rets.count > 20 else { return nil }
+        let m = rets.reduce(0, +) / Double(rets.count)
+        let v = rets.map { ($0 - m) * ($0 - m) }.reduce(0, +) / Double(rets.count - 1)
+        return v.squareRoot() * 100
+    }
+}
+
 enum QuoteAPI {
     /// One chart call gives the live price plus a month of daily bars.
     static func fetch(_ ysym: String) async throws -> Quote {
         let enc = ysym.addingPercentEncoding(
             withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: ".-^"))) ?? ysym
         let url = URL(string: "https://query1.finance.yahoo.com/v8/finance/chart/"
-                      + enc + "?range=1mo&interval=1d")!
+                      + enc + "?range=1y&interval=1d")!
         let data = try await Net.get(url)
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let chart = root["chart"] as? [String: Any],
@@ -176,7 +221,8 @@ enum QuoteAPI {
             vols = (q["volume"] as? [Any] ?? []).compactMap { $0 as? Double }
         }
 
-        // NOTE: with range=1mo, chartPreviousClose is LAST MONTH's close, not yesterday's.
+        // NOTE: chartPreviousClose is the close at the START of the range, not
+        // yesterday's — always derive the day move from the change percent.
         var pct = meta["regularMarketChangePercent"] as? Double
         var prev: Double
         if let p = pct, p != 0 || closes.count < 2 {
@@ -211,7 +257,14 @@ enum QuoteAPI {
             volume: meta["regularMarketVolume"] as? Double,
             avgVolume: avgVol,
             chg5d: chgOver(5),
-            chg1mo: closes.count > 1 ? chgOver(closes.count - 1) : nil)
+            chg1mo: chgOver(21),
+            chg3mo: chgOver(63),
+            sma20: TA.sma(closes, 20),
+            sma50: TA.sma(closes, 50),
+            sma200: TA.sma(closes, 200),
+            rsi14: TA.rsi(closes),
+            sigma1d: TA.sigma(closes),
+            annVol: TA.sigma(closes).map { $0 * (252.0).squareRoot() })
     }
 }
 

@@ -40,7 +40,9 @@ WHAT'S IN THE NEWS
 | Volume vs 20-day average | 2×+ = a real event. Under 0.6× = quiet drift. |
 | 5-day / 1-month trend | Is today part of a run, or a reversal? |
 | 52-week range position | Near its highs or near its lows. |
-| What's in the news | Recent headlines that actually name the company. |
+| What's in the news | Recent headlines that actually name the company, plus a tone tally. |
+| What the record says | Trend against its 20/50/200-day averages, RSI, whether today's move is big *for this stock*, annualised volatility, 3-month record. |
+| Distance to key levels | How far the price is from its 50-day average and its 52-week high and low, and what a normal vs big day looks like. |
 
 A symbol turns **orange with a bolt** when volume is 2×+ its 20-day average —
 a quick scan for "something is actually happening here".
@@ -49,6 +51,21 @@ a quick scan for "something is actually happening here".
 being reported so you can judge the cause yourself — it never claims a headline
 *caused* a price move. SEO "share price prediction" pages are filtered out, and
 a headline has to actually name the company to show up.
+
+### What this deliberately does not do
+
+It gives you **no buy/sell/hold recommendation, no price target and no
+forecast.** That is a deliberate limit, not a missing feature.
+
+Everything in the panel is either a measurement (RSI, moving averages,
+volatility, the news tone tally) or arithmetic between today's price and a
+level from the historical record. Each line is phrased to describe where the
+stock *is*, never where it is going. Indicators describe the past; they don't
+determine the future, and a tool that dressed them up as a prediction would be
+asserting a confidence that doesn't exist.
+
+The intent is to put the inputs to a decision in one place, legibly, and leave
+the decision to you or a licensed adviser who knows your circumstances.
 
 ## Setup
 
@@ -155,7 +172,7 @@ src/main.swift   SwiftUI views, portfolio maths, the explain() logic, menus, app
 
 | | |
 |---|---|
-| Prices | Yahoo Finance chart API — one call per symbol gives the live price plus a month of daily bars for trend and volume |
+| Prices | Yahoo Finance chart API — one call per symbol gives the live price plus a year of daily bars, used for the moving averages, RSI, volatility and period returns |
 | News | Google News RSS, India edition |
 
 Both are public endpoints needing no key. Prices can lag by up to a minute —
