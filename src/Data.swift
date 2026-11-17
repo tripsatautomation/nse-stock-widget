@@ -24,25 +24,42 @@ struct Config: Codable {
 }
 
 enum ConfigLoader {
-    /// holdings.json sits next to the .app so it stays editable after build.
+    /// Config lives in Application Support, NOT next to the app.
+    ///
+    /// macOS TCC gates an app's access to Desktop/Documents/Downloads behind a
+    /// consent prompt, and the read blocks until it is answered. An ad-hoc signed
+    /// app also gets a new code identity on every rebuild, which revokes any
+    /// previous grant — so a config file on the Desktop can hang launch forever.
+    /// Application Support and the app's own bundle need no permission.
+    static var supportDir: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("StockWidget", isDirectory: true)
+    }
+
+    static var userConfig: URL { supportDir.appendingPathComponent("holdings.json") }
+
+    /// Seed Application Support from the bundled sample on first run.
+    static func bootstrap() {
+        let fm = FileManager.default
+        guard !fm.fileExists(atPath: userConfig.path) else { return }
+        try? fm.createDirectory(at: supportDir, withIntermediateDirectories: true)
+        if let seed = Bundle.main.url(forResource: "holdings.example", withExtension: "json") {
+            try? fm.copyItem(at: seed, to: userConfig)
+        }
+    }
+
     static func locate() -> URL? {
         let fm = FileManager.default
-        let exe = Bundle.main.bundleURL.deletingLastPathComponent()
-        let roots = [exe, exe.deletingLastPathComponent()]
-        // Your own holdings.json wins; the committed sample is the fallback so a
-        // fresh clone runs before you have configured anything.
-        for name in ["holdings.json", "holdings.example.json"] {
-            for root in roots {
-                let u = root.appendingPathComponent(name)
-                if fm.fileExists(atPath: u.path) { return u }
-            }
-            if let r = Bundle.main.url(forResource: (name as NSString).deletingPathExtension,
-                                       withExtension: "json") { return r }
+        if fm.fileExists(atPath: userConfig.path) { return userConfig }
+        // The app's own bundle is always readable, no prompt.
+        for n in ["holdings", "holdings.example"] {
+            if let r = Bundle.main.url(forResource: n, withExtension: "json") { return r }
         }
         return nil
     }
 
     static func load() -> Config {
+        bootstrap()
         guard let url = locate(), let d = try? Data(contentsOf: url),
               let c = try? JSONDecoder().decode(Config.self, from: d) else {
             return Config(holdings: [], indices: [])

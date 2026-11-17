@@ -48,7 +48,18 @@ final class Store: ObservableObject {
     @Published var sort: SortKey = .pct
     @Published var selected: String?
     @Published var now = Date()
-    @Published var pinned = true
+    @Published var pinned = UserDefaults.standard.bool(forKey: "keepOnTop")
+
+    /// Normal window by default — it should sit in the window order like any
+    /// other app. Pinning is opt-in and remembered.
+    func applyPin(_ on: Bool) {
+        pinned = on
+        UserDefaults.standard.set(on, forKey: "keepOnTop")
+        for w in NSApp.windows where w.title == "Market" {
+            w.level = on ? .floating : .normal
+        }
+        (NSApp.delegate as? AppDelegate)?.pinMenuItem?.state = on ? .on : .off
+    }
 
     let config = ConfigLoader.load()
     private var lastFetch = Date.distantPast
@@ -198,13 +209,14 @@ struct HeaderBar: View {
                     .foregroundColor(store.loading ? .accent : .muted)
             }.buttonStyle(.plain).help("Refresh now")
             Button {
-                store.pinned.toggle()
-                NSApp.windows.first?.level = store.pinned ? .floating : .normal
+                store.applyPin(!store.pinned)
             } label: {
                 Image(systemName: store.pinned ? "pin.fill" : "pin.slash")
                     .font(.system(size: 11))
                     .foregroundColor(store.pinned ? .accent : .muted)
-            }.buttonStyle(.plain).help("Keep on top of other windows")
+            }.buttonStyle(.plain)
+             .help(store.pinned ? "Keeping on top — click to unpin (⌘T)"
+                                : "Keep on top of other windows (⌘T)")
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
         .background(Color.panel)
@@ -409,6 +421,7 @@ struct ContentView: View {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var window: NSWindow!
+    var pinMenuItem: NSMenuItem?
     let store = Store()
 
     func applicationDidFinishLaunching(_ n: Notification) {
@@ -421,7 +434,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.titleVisibility = .hidden
         window.isMovableByWindowBackground = true
         window.backgroundColor = NSColor(red: 0.055, green: 0.067, blue: 0.086, alpha: 1)
-        window.level = .floating
+        window.level = store.pinned ? .floating : .normal
         window.minSize = NSSize(width: 380, height: 420)
         window.contentView = NSHostingView(rootView: ContentView(store: store))
         window.setFrameAutosaveName("MarketWidget")
@@ -434,13 +447,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             window.setFrame(f, display: true)
         }
-        // Launched at login the app can be restored minimized — force it visible.
+        // A fresh launch should show the window (at login macOS may otherwise
+        // restore it minimized). After that it behaves like any normal window:
+        // ⌘M minimises, ⌘H hides, and it goes behind whatever you focus next.
         window.isRestorable = false
         window.deminiaturize(nil)
         window.makeKeyAndOrderFront(nil)
-        window.orderFrontRegardless()
         NSApp.activate(ignoringOtherApps: true)
+        buildMenu()
         store.refresh()
+    }
+
+    @objc func togglePin() { store.applyPin(!store.pinned) }
+
+    /// Without a main menu an NSApplication gets no standard shortcuts at all —
+    /// no ⌘H to hide, no ⌘M to minimise, no ⌘Q to quit.
+    func buildMenu() {
+        let main = NSMenu()
+
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "About Stock Widget",
+                        action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+                        keyEquivalent: "")
+        appMenu.addItem(.separator())
+        let pin = NSMenuItem(title: "Keep on Top", action: #selector(togglePin),
+                             keyEquivalent: "t")
+        pin.target = self
+        pin.state = store.pinned ? .on : .off
+        appMenu.addItem(pin)
+        pinMenuItem = pin
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Hide Stock Widget",
+                        action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        let hideOthers = NSMenuItem(title: "Hide Others",
+                                    action: #selector(NSApplication.hideOtherApplications(_:)),
+                                    keyEquivalent: "h")
+        hideOthers.keyEquivalentModifierMask = [.command, .option]
+        appMenu.addItem(hideOthers)
+        appMenu.addItem(withTitle: "Show All",
+                        action: #selector(NSApplication.unhideAllApplications(_:)),
+                        keyEquivalent: "")
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Quit Stock Widget",
+                        action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appItem.submenu = appMenu
+        main.addItem(appItem)
+
+        let winItem = NSMenuItem()
+        let winMenu = NSMenu(title: "Window")
+        winMenu.addItem(withTitle: "Minimize",
+                        action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        winMenu.addItem(withTitle: "Zoom",
+                        action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
+        winMenu.addItem(.separator())
+        winMenu.addItem(withTitle: "Close",
+                        action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        winItem.submenu = winMenu
+        main.addItem(winItem)
+
+        NSApp.mainMenu = main
+        NSApp.windowsMenu = winMenu
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ a: NSApplication) -> Bool { true }
@@ -448,6 +515,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 // NSApplication.delegate is weak — keep a strong reference alive here.
 var gDelegate: AppDelegate?
+
 
 MainActor.assumeIsolated {
     let app = NSApplication.shared

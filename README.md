@@ -12,7 +12,8 @@ no accounts.
 - **Live NSE prices** for your holdings, with position P&L and day P&L
 - **Index strip** — NIFTY 50, SENSEX, BANK NIFTY, INDIA VIX
 - **A "why is it moving" panel** on every stock (see below)
-- **Always-on-top** floating window, pinnable
+- **Behaves like a normal window** — ⌘M minimises, ⌘H hides, it sits in the
+  normal window order. Keep-on-top is opt-in (⌘T) and remembered
 - Auto-refreshes every 60s while the market is open, every 5 min when closed
 - Real NSE market hours (09:15–15:30 IST, Mon–Fri), shown as a live status
 
@@ -54,16 +55,49 @@ a headline has to actually name the company to show up.
 ```bash
 git clone https://github.com/tripsatautomation/nse-stock-widget.git
 cd nse-stock-widget
-cp holdings.example.json holdings.json   # then edit it with your positions
 ./build.sh
 open "Stock Widget.app"
 ```
 
-`holdings.json` is gitignored — your positions stay on your machine. The app
-falls back to `holdings.example.json` if you haven't made one yet, so it runs
-straight after cloning.
+On first run it seeds your config from the bundled sample, so it works
+immediately. Then edit your positions (see below) and restart.
+
+## Window behaviour
+
+| | |
+|---|---|
+| ⌘M | Minimise |
+| ⌘H | Hide the app (⌥⌘H hides everything else) |
+| ⌘T | Keep on Top — off by default, remembered between launches |
+| ⌘W / ⌘Q | Close / Quit |
+
+By default it is an ordinary window: click another app and it goes behind,
+like anything else. Turn on **Keep on Top** (menu or the pin button) only if
+you want it floating above your work.
 
 ## Configuring holdings
+
+Your positions live at:
+
+```
+~/Library/Application Support/StockWidget/holdings.json
+```
+
+> **Why not next to the app?** macOS gates an app's access to Desktop,
+> Documents and Downloads behind a consent prompt, and the file read *blocks
+> until that prompt is answered*. An ad-hoc signed app also gets a new code
+> identity on every rebuild, which revokes any grant it was given before. A
+> config file in one of those folders can therefore hang the app at launch with
+> no window and no error. Application Support needs no permission, so the
+> config lives there and the sample ships inside the app bundle.
+
+Open it with:
+
+```bash
+open -e ~/Library/Application\ Support/StockWidget/holdings.json
+```
+
+Each row looks like:
 
 ```json
 {"symbol": "BHARTIARTL", "yahoo": "BHARTIARTL.NS", "name": "Bharti Airtel", "qty": 10, "avg": 1600.00}
@@ -77,6 +111,8 @@ straight after cloning.
   index-linked rather than looking for company news
 
 Restart the app after editing. No rebuild needed — the JSON is read at runtime.
+`holdings.example.json` in the repo is only the template; it is copied into the
+app bundle at build time and used to seed your config on first run.
 
 > **Tip:** NSE has renamed several ETF tickers, so what your broker displays may
 > not be what Yahoo uses. If a row shows no price, look the symbol up at
@@ -112,7 +148,7 @@ AppKit and SwiftUI.
 
 ```
 src/Data.swift   config, market clock, quote fetch, news fetch + ranking, formatting
-src/main.swift   SwiftUI views, portfolio maths, the explain() logic, app shell
+src/main.swift   SwiftUI views, portfolio maths, the explain() logic, menus, app shell
 ```
 
 ## Data sources

@@ -8,6 +8,10 @@
 		<data>
 		9WN7NXNETVMpYbN6tiLnMi83MD4=
 		</data>
+		<key>Resources/holdings.example.json</key>
+		<data>
+		0KyfGAbVmnvofpf8h8GsgcFxO/s=
+		</data>
 	</dict>
 	<key>files2</key>
 	<dict>
@@ -16,6 +20,13 @@
 			<key>hash2</key>
 			<data>
 			lmHW0LCRH/27k+uzwhwD3jES6pOXPLbIAkJEOsDRq8Q=
+			</data>
+		</dict>
+		<key>Resources/holdings.example.json</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			hgjpxB5SgoVDkgjStRF5YnL1zmXLLFVDeOt2in3KoiE=
 			</data>
 		</dict>
 	</dict>
