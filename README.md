@@ -66,7 +66,7 @@ straight after cloning.
 ## Configuring holdings
 
 ```json
-{"symbol": "RELIANCE", "yahoo": "RELIANCE.NS", "name": "Reliance Industries", "qty": 10, "avg": 1400.00}
+{"symbol": "BHARTIARTL", "yahoo": "BHARTIARTL.NS", "name": "Bharti Airtel", "qty": 10, "avg": 1600.00}
 ```
 
 - `symbol` — what's shown in the widget (use whatever your broker calls it)
